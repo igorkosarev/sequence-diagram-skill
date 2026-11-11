@@ -54,6 +54,32 @@ Shows: human actors on both ends, a multi-phase flow, two independent `alt` deci
 | Gold `opt` / `loop` | Optional step / repetition |
 | Red `break` | Error that aborts the flow |
 
+## Privacy & security
+
+Your diagrams never leave your machine. The skill has **no calls to online PlantUML renderers** (plantuml.com, Kroki, etc.) and sends no diagram content anywhere.
+
+| Step | Where it runs | Network |
+|---|---|---|
+| Writing the `.puml` | Claude, following `SKILL.md` | — |
+| Linting (`validate_puml.py file.puml`) | Local Python, standard library only | None |
+| Rendering (`validate_puml.py file.puml --render`) | Local Java, `plantuml.jar` | One-time download of the jar, then none |
+
+**The only network request** is downloading `plantuml.jar` the first time you render. It contains nothing from your diagram — just a fixed URL:
+
+- the version is **pinned** (PlantUML `1.2024.7`) and fetched from the official [GitHub releases](https://github.com/plantuml/plantuml/releases);
+- the file is **verified against a SHA-256 checksum** before it is ever run; a mismatch aborts;
+- it is cached in `~/.cache/plantuml/` — after that, rendering works **fully offline**.
+
+**Rendering is sandboxed.** PlantUML runs with `PLANTUML_SECURITY_PROFILE=SANDBOX`, so a diagram cannot make the renderer fetch URLs or read local files (`!include`, `!includeurl`, remote sprites are blocked) — even if you render a `.puml` someone else gave you.
+
+**Air-gapped / corporate setups:** download the jar yourself (or from an internal mirror) and point the script at it — then no request is made at all:
+
+```bash
+export PLANTUML_JAR=/path/to/plantuml.jar
+```
+
+Linting alone never needs the network or Java.
+
 ## Contents
 
 | Path | Purpose |
@@ -61,7 +87,7 @@ Shows: human actors on both ends, a multi-phase flow, two independent `alt` deci
 | `SKILL.md` | Instructions Claude follows |
 | `assets/template.puml` | Starting template with the color palette |
 | `references/` | PlantUML sequence cheatsheet and palette preview |
-| `scripts/validate_puml.py` | Lints a `.puml` without Java (unbalanced blocks and activations); `--render` also renders it to SVG |
+| `scripts/validate_puml.py` | Lints a `.puml` without Java (unbalanced blocks and activations); `--render` also renders it to SVG locally — see [Privacy & security](#privacy--security) |
 | `examples/` | Sample diagrams: `.puml` source + rendered PNG/SVG |
 
 ## Install
