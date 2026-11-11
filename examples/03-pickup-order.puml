@@ -1,0 +1,80 @@
+@startuml
+skinparam MaxMessageSize 300
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign center
+
+!$reserve = "POST /stock/reserve"
+!$sms = "POST /messages"
+
+title Delivery\nOrder with pickup at a parcel point
+
+box "Customer" #AliceBlue
+actor "Customer" as cl
+participant "Mobile app" as mob
+end box
+
+box "Shop" #AntiqueWhite
+participant "Order Service" as ord
+participant "Warehouse" as wh
+end box
+
+box "External services" #MintCream
+participant "SMS gateway" as sms
+end box
+
+box "Pickup point" #MistyRose
+actor "Pickup operator" as op
+end box
+
+cl -> mob: Places order, chooses pickup point
+activate mob
+mob -> ord: Create order
+activate ord
+ord -> wh: **$reserve**\nOrder items
+activate wh
+alt#Gold #LightBlue All items in stock
+  wh --> ord: Reserved for 24 h
+else #Khaki Some items missing
+  wh --> ord: Partial reservation
+  ord --> mob: Offer substitutes or remove items
+  mob --> cl: Substitution screen
+  cl -> mob: Confirms updated order
+  mob -> ord: Updated order
+end
+deactivate wh
+ord --> mob: Order number, delivery date
+mob --> cl: "Order placed"
+deactivate mob
+
+== Delivery to pickup point ==
+
+wh -> op: Ships to pickup point
+activate op
+op -> ord: Order received at pickup point
+ord -> sms: **$sms**\nPickup code
+activate sms
+sms --> cl: SMS with code
+deactivate sms
+
+== Handover ==
+
+cl -> op: Tells the code
+alt#Gold #LightBlue Code is correct
+  op -> ord: Order handed over
+  ord --> op: OK
+  op --> cl: Hands over the order
+else #Khaki Code is wrong
+  op --> cl: Asks to check the SMS
+end
+
+break#Red #Pink Not picked up within 7 days
+  ord -> wh: Return to warehouse
+  ord -> sms: **$sms**\nOrder cancelled
+  note right of ord
+    Storage period is 7 days,
+    then the refund is issued automatically
+  end note
+end
+deactivate op
+deactivate ord
+@enduml

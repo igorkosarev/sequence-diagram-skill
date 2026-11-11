@@ -1,0 +1,89 @@
+@startuml
+skinparam MaxMessageSize 300
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign center
+
+!$orders = "POST /orders"
+!$intent = "POST /v1/payment_intents"
+!$webhook = "POST /webhooks/payments"
+
+title Online store\nCheckout with an external payment provider
+
+box "Customer" #AliceBlue
+actor "Customer" as cust
+participant "Web app" as web
+end box
+
+box "Shop backend" #Linen
+participant "Order Service" as ord
+database "Orders DB" as db
+queue "Events" as bus
+end box
+
+box "Payment provider" #Honeydew
+participant "Payments API" as psp
+end box
+
+== Place order ==
+
+cust -> web: Clicks "Pay"
+activate web
+web -> ord: **$orders**\nCart + shipping address
+activate ord
+ord -> db: Create order (status = PENDING)
+activate db
+db --> ord: order_id
+deactivate db
+
+ord -> psp: **$intent**\nAmount, currency, order_id
+activate psp
+alt#Gold #LightBlue 200 OK
+  psp --> ord: **client_secret**
+  ord --> web: 201 Created\norder_id + client_secret
+  web -> psp: Confirm card payment (3-D Secure if required)
+  activate psp
+  psp --> web: Payment processing
+  deactivate psp
+  web --> cust: "We're confirming your payment…"
+else #Khaki 402 card declined
+  psp --> ord: **Error**\ncard_declined
+  ord -> db: Order status = PAYMENT_FAILED
+  activate db
+  db --> ord: OK
+  deactivate db
+  ord --> web: 402 Payment required
+  web --> cust: Asks for another card
+end
+deactivate psp
+deactivate ord
+deactivate web
+
+== Asynchronous confirmation ==
+
+psp -> ord: **$webhook**\npayment_intent.succeeded
+activate ord
+note right of ord
+  The webhook, not the browser,
+  is the source of truth: the customer
+  may close the tab before redirect.
+end note
+
+loop#Gold Up to 3 retries with backoff
+  ord -> db: Order status = PAID (idempotent by event id)
+  activate db
+  db --> ord: OK
+  deactivate db
+end
+
+break#Red #Pink DB still unavailable
+  ord --> psp: 500
+  note right of psp
+    Provider re-delivers the webhook
+    for up to 3 days
+  end note
+end
+
+ord ->> bus: OrderPaid event
+ord --> psp: 200 OK
+deactivate ord
+@enduml

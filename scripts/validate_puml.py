@@ -11,7 +11,7 @@ Also sanity-checks @startuml/@enduml.
 
 Usage:
     python3 validate_puml.py diagram.puml            # lint only
-    python3 validate_puml.py diagram.puml --render   # lint + render to SVG (needs Java)
+    python3 validate_puml.py diagram.puml --render   # lint + render to SVG locally (needs Java)
 
 Exit code 0 = clean, 1 = problems found.
 """
@@ -203,33 +203,50 @@ def lint(path):
     return errors, warnings
 
 
+# Pinned PlantUML release. The jar is downloaded once, verified against this
+# SHA-256 and cached; after that rendering works fully offline. To use your own
+# copy instead (e.g. from an internal mirror), set PLANTUML_JAR=/path/to.jar.
+PLANTUML_VERSION = "1.2024.7"
+PLANTUML_SHA256 = "e34c12bbe9944f1f338ca3d88c9b116b86300cc8e90b35c4086b825b5ae96d24"
+PLANTUML_URL = (
+    "https://github.com/plantuml/plantuml/releases/download/"
+    f"v{PLANTUML_VERSION}/plantuml-{PLANTUML_VERSION}.jar"
+)
+
+
+def sha256_of(path):
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
 def find_or_get_jar():
+    override = os.environ.get("PLANTUML_JAR")
+    if override:
+        if not os.path.isfile(override):
+            raise RuntimeError(f"PLANTUML_JAR points to a missing file: {override}")
+        return override
+
     cache = os.path.expanduser("~/.cache/plantuml")
     os.makedirs(cache, exist_ok=True)
-    existing = [f for f in os.listdir(cache) if f.endswith(".jar")]
-    if existing:
-        return os.path.join(cache, existing[0])
-    import json
-    api = "https://api.github.com/repos/plantuml/plantuml/releases/latest"
-    with urllib.request.urlopen(api, timeout=30) as r:
-        data = json.load(r)
-    asset = None
-    for a in data.get("assets", []):
-        n = a["name"]
-        if re.match(r"^plantuml-\d[\d.]*\.jar$", n):  # plain versioned jar
-            asset = a
-            break
-    if not asset:  # fall back to any .jar that isn't sources/javadoc
-        for a in data.get("assets", []):
-            n = a["name"]
-            if n.endswith(".jar") and "source" not in n and "javadoc" not in n:
-                asset = a
-                break
-    if not asset:
-        raise RuntimeError("could not locate a plantuml jar in the latest release")
-    dest = os.path.join(cache, asset["name"])
-    print(f"  downloading {asset['name']} ...")
-    urllib.request.urlretrieve(asset["browser_download_url"], dest)
+    dest = os.path.join(cache, f"plantuml-{PLANTUML_VERSION}.jar")
+
+    if os.path.exists(dest) and sha256_of(dest) == PLANTUML_SHA256:
+        return dest
+
+    print(f"  downloading plantuml-{PLANTUML_VERSION}.jar from GitHub releases ...")
+    tmp = dest + ".part"
+    urllib.request.urlretrieve(PLANTUML_URL, tmp)
+    actual = sha256_of(tmp)
+    if actual != PLANTUML_SHA256:
+        os.remove(tmp)
+        raise RuntimeError(
+            f"checksum mismatch for plantuml.jar (expected {PLANTUML_SHA256}, "
+            f"got {actual}) — refusing to run it")
+    os.replace(tmp, dest)
     return dest
 
 
@@ -242,8 +259,13 @@ def render(path):
     except Exception as e:
         print(f"  Could not obtain plantuml.jar: {e}")
         return
+    # SANDBOX security profile: PlantUML may not read local files outside the
+    # diagram or fetch URLs (!include / !includeurl / remote sprites), so a
+    # diagram cannot make the renderer reach the network.
     out = subprocess.run(
-        ["java", "-jar", jar, "-tsvg", path],
+        ["java", "-Djava.awt.headless=true",
+         "-DPLANTUML_SECURITY_PROFILE=SANDBOX",
+         "-jar", jar, "-tsvg", path],
         capture_output=True, text=True)
     svg = os.path.splitext(path)[0] + ".svg"
     if out.returncode == 0 and os.path.exists(svg):
@@ -257,7 +279,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("file")
     ap.add_argument("--render", action="store_true",
-                    help="also render to SVG (needs Java; fetches plantuml.jar)")
+                    help="also render to SVG locally (needs Java; downloads a pinned, checksum-verified plantuml.jar once)")
     args = ap.parse_args()
 
     errors, warnings = lint(args.file)

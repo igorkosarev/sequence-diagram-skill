@@ -1,0 +1,75 @@
+@startuml
+skinparam MaxMessageSize 300
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign center
+
+!$authorize = "GET /authorize"
+!$token = "POST /oauth/token"
+
+title SaaS app\nSign-in with OpenID Connect and optional 2FA
+
+box "User side" #AliceBlue
+actor "User" as usr
+participant "Browser" as br
+end box
+
+box "Our app" #Cornsilk
+participant "Backend" as app
+database "Sessions" as ses
+end box
+
+box "Identity provider" #Thistle
+participant "IdP" as idp
+end box
+
+usr -> br: Clicks "Sign in with SSO"
+activate br
+br -> app: GET /login
+activate app
+app --> br: 302 → IdP\nstate + PKCE challenge
+deactivate app
+
+br -> idp: **$authorize**\nclient_id, state, code_challenge
+activate idp
+idp --> br: Login page
+usr -> br: Enters credentials
+br -> idp: Credentials
+
+opt#Gold 2FA enabled for the account
+  idp --> br: OTP prompt
+  usr -> br: Enters code from authenticator
+  br -> idp: OTP
+  break#Red #Pink 3 wrong codes
+    idp --> br: Account temporarily locked
+    br --> usr: "Try again in 15 minutes"
+  end
+end
+
+idp --> br: 302 → /callback\ncode + state
+deactivate idp
+
+br -> app: GET /callback?code&state
+activate app
+alt#Gold #LightBlue state matches
+  app -> idp: **$token**\ncode + code_verifier
+  activate idp
+  idp --> app: id_token + access_token
+  deactivate idp
+  app -> ses: Create session
+  activate ses
+  ses --> app: session_id
+  deactivate ses
+  app --> br: 302 → /dashboard\nSet-Cookie: session
+  br --> usr: Dashboard
+else #Khaki state mismatch
+  app --> br: 400 Bad request
+  br --> usr: "Sign-in expired, please retry"
+  note right of app
+    Protects against CSRF:
+    never exchange a code
+    whose state we did not issue
+  end note
+end
+deactivate app
+deactivate br
+@enduml
