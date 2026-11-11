@@ -1,0 +1,67 @@
+@startuml
+' ── Recommended header ────────────────────────────────────────────────
+skinparam MaxMessageSize 300
+skinparam responseMessageBelowArrow true
+skinparam sequenceMessageAlign center
+' !pragma teoz true          ' uncomment for nested boxes or & (same-time) messages
+
+' ── Reusable endpoints / refs ─────────────────────────────────────────
+!$endpoint = "/resource"
+
+title <Diagram name>\n<optional subtitle>
+
+' ── Participants, grouped by system (one light color per domain) ───────
+box "User side" #AliceBlue
+actor "User" as usr
+end box
+
+box "Our side" #Snow
+participant "App" as app
+database "Data Base" as db
+end box
+
+box "External" #Honeydew
+participant "External API" as api
+end box
+
+' ── Happy path ────────────────────────────────────────────────────────
+usr -> app: Initiates action
+activate usr
+activate app
+
+app -> api: **Request**\n$endpoint
+activate api
+
+' ── Branching: normal / alternative / abort ───────────────────────────
+alt#Gold #LightBlue Success
+  api --> app: **Response**\n200 OK
+
+  ' optional step that only sometimes runs (its own activate/deactivate)
+  opt#Gold Persist result
+    app -> db: Write data
+    activate db
+    db --> app: Saved
+    deactivate db
+  end
+
+  app --> usr: Done
+
+else #Khaki Alternative outcome
+  api --> app: **Response**\nAlternative
+  app --> usr: Handled alternative
+
+end
+' one continuous bar — closed once, after the alt (not inside the branches)
+deactivate api
+
+' ── Error path that aborts the flow ───────────────────────────────────
+break#Red #Pink Error
+  app --> usr: Ошибка
+  note right
+    Explain how / why the flow aborts here
+  end note
+end
+
+deactivate app
+deactivate usr
+@enduml
