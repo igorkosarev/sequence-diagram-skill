@@ -1,0 +1,15 @@
+{
+  "name": "kosarev-skills",
+  "description": "Claude skills by Igor Kosarev",
+  "owner": {
+    "name": "Igor Kosarev",
+    "url": "https://github.com/igorkosarev"
+  },
+  "plugins": [
+    {
+      "name": "sequence-diagram",
+      "source": "./",
+      "description": "Turn a described interaction flow into a readable PlantUML sequence diagram."
+    }
+  ]
+}

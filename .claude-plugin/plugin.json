@@ -1,0 +1,10 @@
+{
+  "name": "sequence-diagram",
+  "version": "1.0.0",
+  "description": "Turn a described interaction flow into a readable PlantUML sequence diagram: domain-colored participant boxes, activation bars, semantically colored alt/opt/loop/break blocks.",
+  "author": { "name": "Igor Kosarev", "url": "https://github.com/igorkosarev" },
+  "homepage": "https://github.com/igorkosarev/sequence-diagram-skill",
+  "repository": "https://github.com/igorkosarev/sequence-diagram-skill",
+  "license": "MIT",
+  "keywords": ["plantuml", "sequence-diagram", "diagrams", "documentation", "architecture"]
+}

@@ -88,11 +88,25 @@ Linting alone never needs the network or Java.
 | `assets/template.puml` | Starting template with the color palette |
 | `references/` | PlantUML sequence cheatsheet and palette preview |
 | `scripts/validate_puml.py` | Lints a `.puml` without Java (unbalanced blocks and activations); `--render` also renders it to SVG locally — see [Privacy & security](#privacy--security) |
+| `.claude-plugin/` | Plugin + marketplace manifests, so the repo installs via `/plugin` |
 | `examples/` | Sample diagrams: `.puml` source + rendered PNG/SVG |
 
 ## Install
 
-**Claude Code** — clone into your skills folder:
+**Claude Code — as a plugin (recommended).** Updates come with `/plugin update`:
+
+```
+/plugin marketplace add igorkosarev/sequence-diagram-skill
+/plugin install sequence-diagram@kosarev-skills
+```
+
+On Claude Code 2.1.275+ this is a single step:
+
+```
+/plugin install sequence-diagram --marketplace igorkosarev/sequence-diagram-skill
+```
+
+**Claude Code — as a plain skill.** Clone into your skills folder:
 
 ```bash
 git clone https://github.com/igorkosarev/sequence-diagram-skill ~/.claude/skills/sequence-diagram
